@@ -1,0 +1,171 @@
+// Claude Code Training — Prisma schema (SQLite dev + Postgres prod)
+// 2026-07-11 Sprint 2 — 9 tables
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ════════════════════════════════════════════════════════════════
+// 1. Users
+// ════════════════════════════════════════════════════════════════
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  role          String    @default("student") // student / admin / instructor
+  plan          String    @default("free") // free / basic / pro / enterprise / consulting
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  enrollments   Enrollment[]
+  submissions   Submission[]
+  bookings      Booking[]
+  certificates  Certificate[]
+}
+
+// ════════════════════════════════════════════════════════════════
+// 2. Courses
+// ════════════════════════════════════════════════════════════════
+model Course {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  description String
+  level       String    // basic / advanced / enterprise
+  price       Int       @default(0) // NT$
+  duration    Int       @default(0) // 分鐘
+  thumbnail   String?
+  published   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lessons     Lesson[]
+  enrollments Enrollment[]
+}
+
+// ════════════════════════════════════════════════════════════════
+// 3. Lessons
+// ════════════════════════════════════════════════════════════════
+model Lesson {
+  id          String    @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  videoUrl    String?
+  duration    Int       @default(0) // 影片長度（分鐘）
+  order       Int       @default(0)
+
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  exercises   Exercise[]
+  progress    Progress[]
+}
+
+// ════════════════════════════════════════════════════════════════
+// 4. Exercises
+// ════════════════════════════════════════════════════════════════
+model Exercise {
+  id        String    @id @default(cuid())
+  lessonId  String
+  type      String    // multiple_choice / code / essay
+  question  String
+  options   String?   // JSON
+  answer    String
+  points    Int       @default(10)
+
+  lesson    Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+}
+
+// ════════════════════════════════════════════════════════════════
+// 5. Enrollments
+// ════════════════════════════════════════════════════════════════
+model Enrollment {
+  id              String    @id @default(cuid())
+  userId          String
+  courseId        String
+  status          String    @default("active") // active / completed / expired
+  enrolledAt      DateTime  @default(now())
+  completedAt     DateTime?
+  stripePaymentId String?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress Progress[]
+  certificate Certificate?
+
+  @@unique([userId, courseId])
+}
+
+// ════════════════════════════════════════════════════════════════
+// 6. Progress
+// ════════════════════════════════════════════════════════════════
+model Progress {
+  id           String    @id @default(cuid())
+  enrollmentId String
+  lessonId     String
+  watched      Int       @default(0) // 已觀看秒數
+  completed    Boolean   @default(false)
+  completedAt  DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+}
+
+// ════════════════════════════════════════════════════════════════
+// 7. Submissions
+// ════════════════════════════════════════════════════════════════
+model Submission {
+  id          String    @id @default(cuid())
+  exerciseId  String
+  userId      String
+  answer      String
+  score       Int       @default(0)
+  feedback    String?
+  submittedAt DateTime  @default(now())
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ════════════════════════════════════════════════════════════════
+// 8. Bookings
+// ════════════════════════════════════════════════════════════════
+model Booking {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String    // enterprise / consulting
+  scheduledAt DateTime
+  duration    Int       @default(60)
+  status      String    @default("pending") // pending / confirmed / completed / cancelled
+  attendees   Int       @default(1)
+  price       Int       @default(0)
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ════════════════════════════════════════════════════════════════
+// 9. Certificates
+// ════════════════════════════════════════════════════════════════
+model Certificate {
+  id           String   @id @default(cuid())
+  enrollmentId String   @unique
+  userId       String
+  courseId     String
+  issuedAt     DateTime @default(now())
+  pdfUrl       String?
+  verifyCode   String   @unique @default(cuid())
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
