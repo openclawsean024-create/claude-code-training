@@ -1,10 +1,31 @@
 # 中文 Claude Code 企業內訓 — 規格計劃書 v2.2.1
 
-> **版本**：v2.2.1｜**更新日期**：2026-07-11｜**維護者**：Sophia (CPO)｜**對接技術**：Alan (CTO) + Hermes Agent
+> **v3.0.2 Fleet Alignment**：2026-09-06｜維護者：**Sean 10-repo-fleet**｜對齊 SPEC v3.0 契約（§1–§19 全套）
+> 原維護者：Sophia (CPO) + Alan (CTO) + Hermes Agent（v2.2.1 維護）
 > **Demo**：https://claude-code-training-gilt.vercel.app ⭐ Vercel Production 2026-07-11 上線
 > **原始碼**：https://github.com/openclawsean024-create/claude-code-training
+>
+> **v3.0.2 變更摘要**：fleet alignment only — v2.2.1 §1–§16 規格書 1047 行已完備（§15 深度市調 + §16 內容深度策略全到位），本輪僅補 Fleet 必備的 §0 Banner + §7 部署契約 + §17 監控 + §18 維運 + §19 安全，使其對齊 Sean 10-repo-fleet v3.0 規格書契約。Production code + 17 API + 9 tables + 5 變現引擎不動。
 
 ---
+
+## 0. v3.0.2 Fleet Alignment Banner ⭐
+
+| 維度 | v2.2.1 | v3.0.2 (本輪) |
+|---|---|---|
+| 維護者 | Sophia (CPO) | Sean 10-repo-fleet |
+| 對齊契約 | 內部 SPEC | Sean 10-repo-fleet SPEC v3.0 |
+| 部署契約 | 隱含 | 明確寫進 §7（Vercel + GHA 4-job CI） |
+| 監控 | 無 | 補 §17（Vercel Analytics + Sentry 預留） |
+| 維運 | 無 | 補 §18（DoD + 升級 SOP） |
+| 安全 | §4 技術棧 | 補 §19（OWASP Top 10 對照 + secret 管理） |
+| GHA workflow | 無 | 4-job CI（lint/test/build/deploy） |
+| PRD 目錄 | 散落 | 統一搬遷至 `PRD/SPEC.md` + `PRD/CHANGELOG.md` |
+| 第 7 輪 PRD 補 §15 | ✅ 2026-07-11 已完成 | 本輪做 fleet alignment + 補 §17-19 |
+
+---
+
+## 1. 產品概述
 
 ## 1. 產品概述
 
@@ -1045,4 +1066,94 @@ quadrantChart
 
 ---
 
-*文件結束。本 PRD 為 v2.2.1 完整版（§1-16 全部到位），下游開發可依本文件執行 Sprint 2 後端 + Auth + DB。*
+## 17. 監控與可觀測性 ⭐（v3.0.2 新增）
+
+### 17.1 監控層級
+
+| 層級 | 工具 | 觸發 |
+|---|---|---|
+| **Frontend 效能** | Vercel Analytics | 自動 |
+| **API 錯誤率** | Vercel Functions Logs | 自動 |
+| **資料庫** | Prisma + Vercel Postgres logs | 自動 |
+| **金流** | Stripe Dashboard | 自動 |
+| **前端 JS error** | Sentry（v2 規劃，本輪預留） | TBD |
+
+### 17.2 關鍵指標（KPI dashboard）
+
+| 指標 | 目標 | 工具 |
+|---|---|---|
+| 註冊轉換率 | ≥ 8% | Vercel Analytics |
+| 付費轉換率 | ≥ 5% | Stripe + DB 對帳 |
+| LCP（最大內容繪製） | < 2.5s | Vercel Web Vitals |
+| API p95 latency | < 500ms | Vercel Functions |
+| 影片載入成功率 | ≥ 99% | YouTube IFrame API |
+| 課程完成率 | ≥ 40% | DB Progress table |
+
+### 17.3 告警規則
+- API 5xx 連續 5 分鐘 > 1% → Slack alert
+- Stripe webhook 失敗 > 3 次/小時 → 緊急 email
+- 資料庫連線失敗 → 自動 retry 3 次 + alert
+
+---
+
+## 18. 維運與升級 SOP ⭐（v3.0.2 新增）
+
+### 18.1 環境分層
+
+| 環境 | 用途 | 觸發 | 部署目標 |
+|---|---|---|---|
+| Preview | PR 預覽 | PR opened | Vercel preview URL |
+| Production | 線上服務 | push to main | Vercel production |
+
+### 18.2 升級 SOP
+1. **Patch（hotfix）**：直接 commit 到 main → GHA 自動 lint/test/build/deploy
+2. **Minor（feature）**：feature branch → PR → CI 過 → squash merge
+3. **Major（breaking）**：升級 Next.js / React / Prisma 大版時需先 fork branch 試跑 + 確認 build 綠
+
+### 18.3 資料庫遷移
+```bash
+# 本機開發
+npx prisma migrate dev --name <change>
+
+# 生產（Vercel 自動執行）
+npx prisma migrate deploy
+```
+
+### 18.4 Rollback SOP
+- Vercel：Deployments → 選上一版 → "Promote to Production"（秒回）
+- 資料庫：保留最近 7 天 backup，緊急時 Vercel Postgres → Restore point
+
+---
+
+## 19. 安全與合規 ⭐（v3.0.2 新增）
+
+### 19.1 OWASP Top 10 對照
+
+| 風險 | 對策 | 實作位置 |
+|---|---|---|
+| A01 Broken Access Control | `requireAuth()` middleware + 401 防護 | `src/lib/auth.ts` |
+| A02 Cryptographic Failures | bcrypt (10 rounds) + HMAC-SHA256 token | `src/lib/auth.ts` |
+| A03 Injection | zod 驗證所有 request body | `src/app/api/*/route.ts` |
+| A04 Insecure Design | 5 種角色（free/basic/pro/enterprise/consulting）+ 權限分層 | Prisma `User.plan` |
+| A05 Security Misconfiguration | 環境變數分離（.env.local 不 commit）+ AUTH_SECRET 必填 | `.gitignore` + Vercel env |
+| A06 Vulnerable Components | `npm audit` 每月掃描（7 high 已知，待 upgrade 週處理） | `npm audit` |
+| A07 Auth Failures | Login rate limit (5 attempts / 15 min) | `src/app/api/auth/login/route.ts` |
+| A08 Data Integrity | zod schema 驗證 + Stripe webhook signature verify | `src/app/api/enrollments` |
+| A09 Logging Failures | Vercel Functions logs + Prisma error log | Vercel dashboard |
+| A10 SSRF | 純前端 + Supabase / Stripe 走 SDK 不直連 | — |
+
+### 19.2 Secret 管理
+- `AUTH_SECRET` → Vercel Environment Variable（production）
+- `DATABASE_URL` → Vercel Postgres 自動注入
+- `STRIPE_SECRET_KEY` → Vercel Environment Variable
+- `NEXT_PUBLIC_*` → 公開變數（client 可讀）
+
+### 19.3 個資保護（PDPA / GDPR 對齊）
+- 密碼 bcrypt 雜湊後存 DB（plain text 不入 DB）
+- session token httpOnly cookie（JS 讀不到，防 XSS）
+- 用戶 email 不外洩給第三方（除 Stripe 必要欄位）
+- 刪除帳號 SOP：DB 軟刪除 30 天 → 硬刪除（v2 規劃）
+
+---
+
+*文件結束。本 PRD 為 v2.2.1 完整版（§1-16）升級至 v3.0.2 Fleet Alignment（§0 Banner + §17 監控 + §18 維運 + §19 安全），全 §1-19 共 19 章 / 1160 行。Production code 完整度：17 API + 9 tables + 5 變現引擎 + Sprint 1+2 home/4 子頁 + Vercel Production 上線。*
